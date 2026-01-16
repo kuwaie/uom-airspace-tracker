@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天地图动态定位</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <!-- 添加天地图JS SDK -->
+    <script type="text/javascript" src="https://api.tianditu.gov.cn/api?v=4.0"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        #map {
+            width: 100%;
+            height: 100vh;
+            z-index: 1;
+        }
+        .control-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+            border: 1px solid #ddd;
+            width: 160px;
+            transition: all 0.3s ease;
+        }
+        .control-panel.collapsed {
+            height: 28px;
+            overflow: hidden;
+            width: 90px;
+            padding: 6px;
+        }
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+        .control-panel.collapsed .panel-header {
+            margin-bottom: 0;
+        }
+        .panel-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #333;
+            margin: 0;
+        }
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 11px;
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 3px;
+            width: auto;
+            margin: 0;
+        }
+        .toggle-btn:hover {
+            background: #f0f0f0;
+        }
+        button {
+            display: block;
+            margin: 5px 0;
+            padding: 6px 8px;
+            width: 100%;
+            background-color: #4a86e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #3a76d8;
+        }
+        .location-btn {
+            background-color: #2ecc71;
+        }
+        .location-btn:hover {
+            background-color: #27ae60;
+        }
+        .tracking-btn {
+            background-color: #e74c3c;
+        }
+        .tracking-btn:hover {
+            background-color: #c0392b;
+        }
+        .tracking-btn.active {
+            background-color: #e74c3c;
+            box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.5);
+        }
+        .clear-btn {
+            background-color: #e67e22;
+        }
+        .clear-btn:hover {
+            background-color: #d35400;
+        }
+        .load-all-btn {
+            background-color: #2ecc71;
+        }
+        .load-all-btn:hover {
+            background-color: #27ae60;
+        }
+        .auto-load-btn {
+            background-color: #9b59b6;
+        }
+        .auto-load-btn:hover {
+            background-color: #8e44ad;
+        }
+        .auto-load-btn.active {
+            background-color: #8e44ad;
+            box-shadow: 0 0 0 2px rgba(155, 89, 182, 0.5);
+        }
+        .coord-info {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #eee;
+            font-size: 10px;
+        }
+        .coord-item {
+            margin: 3px 0;
+        }
+        .coord-label {
+            font-weight: bold;
+            color: #555;
+            display: inline-block;
+            width: 32px;
+        }
+        .coord-value {
+            color: #333;
+            word-break: break-all;
+        }
+        .coord-input {
+            margin: 8px 0 5px 0;
+        }
+        .coord-input input {
+            width: 100%;
+            padding: 4px;
+            font-size: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            box-sizing: border-box;
+        }
+        .coord-input button {
+            margin-top: 3px;
+            padding: 4px;
+            font-size: 10px;
+        }
+        .location-marker {
+            background-color: #e74c3c;
+            border: 3px solid white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        .accuracy-circle {
+            fill: none;
+            stroke: #3498db;
+            stroke-width: 2;
+            stroke-opacity: 0.3;
+            fill: #3498db;
+            fill-opacity: 0.1;
+        }
+        /* 图层控制面板样式 */
+        .layer-control {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+            border: 1px solid #ddd;
+            max-width: 300px;
+            transition: all 0.3s ease;
+        }
+        .layer-control.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .layer-control h3 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        .layer-item {
+            margin: 5px 0;
+            display: flex;
+            align-items: flex-start;
+        }
+        .layer-item input {
+            margin-right: 6px;
+            margin-top: 2px;
+        }
+        .layer-item label {
+            font-size: 12px;
+            color: #333;
+            cursor: pointer;
+            line-height: 1.3;
+        }
+        .layer-desc {
+            font-size: 10px;
+            color: #666;
+            margin-top: 1px;
+            display: block;
+        }
+        .token-input {
+            margin: 10px 0 5px 0;
+            padding-top: 8px;
+            border-top: 1px solid #eee;
+        }
+        .token-input label {
+            font-size: 11px;
+            font-weight: bold;
+            color: #555;
+            display: block;
+            margin-bottom: 3px;
+        }
+        .token-input input {
+            width: 100%;
+            padding: 4px;
+            font-size: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            box-sizing: border-box;
+            margin-bottom: 5px;
+            transition: border-color 0.3s;
+        }
+        .token-input input.empty {
+            border: 2px solid #ff0000;
+            background-color: #ff0000;
+            color: #000000;
+        }
+        .token-input input.empty::placeholder {
+            color: #FEFEFE;
+            font-weight: bold;
+            opacity: 1;
+        }
+        .token-input button {
+            margin-top: 3px;
+            padding: 4px;
+            font-size: 10px;
+        }
+        .token-note {
+            font-size: 9px;
+            color: #888;
+            margin-top: 3px;
+            line-height: 1.2;
+        }
+        .token-help {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 6px;
+            margin: 8px 0;
+            font-size: 10px;
+            color: #856404;
+        }
+        .token-help h4 {
+            margin: 0 0 4px 0;
+            font-size: 11px;
+            color: #856404;
+        }
+        .token-help ul {
+            margin: 4px 0;
+            padding-left: 15px;
+        }
+        .token-help li {
+            margin: 2px 0;
+        }
+        .token-status {
+            font-size: 9px;
+            padding: 3px 6px;
+            border-radius: 3px;
+            margin-left: 5px;
+        }
+        .status-valid {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-invalid {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status-empty {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .button-row {
+            display: flex;
+            gap: 5px;
+            margin: 8px 0;
+        }
+        .button-row button {
+            flex: 1;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- 图层控制面板 -->
+    <div class="layer-control hidden" id="layer-control">
+        <h3>图层控制</h3>
+        <div class="layer-item">
+            <input type="checkbox" id="base-layer-check" checked disabled>
+            <label for="base-layer-check">天地图底图 
+                <span class="token-status" id="tianditu-status">未设置</span>
+            </label>
+        </div>
+        <div class="layer-item">
+            <input type="checkbox" id="annotation-layer-check" checked disabled>
+            <label for="annotation-layer-check">天地图标注 
+                <span class="token-status" id="annotation-status">未设置</span>
+            </label>
+        </div>
+        <div class="layer-item">
+            <input type="checkbox" id="layer1-check">
+            <label for="layer1-check">华北地区空域
+                <span class="layer-desc">北京、天津、河北、山西、内蒙古</span>
+            </label>
+        </div>
+        <div class="layer-item">
+            <input type="checkbox" id="layer2-check">
+            <label for="layer2-check">东北地区空域
+                <span class="layer-desc">辽宁、吉林、黑龙江</span>
+            </label>
+        </div>
+        <div class="layer-item">
+            <input type="checkbox" id="layer7-check">
+            <label for="layer7-check">西北地区空域
+                <span class="layer-desc">陕西、甘肃、青海、宁夏、新疆</span>
+            </label>
+        </div>
+        <div class="layer-item">
+            <input type="checkbox" id="layer6-check" checked>
+            <label for="layer6-check">西南地区空域
+                <span class="layer-desc">重庆、四川、贵州、云南、西藏</span>
+            </label>
+        </div>
+        <div class="layer-item">
+            <input type="checkbox" id="layer4-check">
+            <label for="layer4-check">华中地区空域
+                <span class="layer-desc">河南、湖北、湖南</span>
+            </label>
+        </div>
+        <div class="layer-item">
+            <input type="checkbox" id="layer3-check">
+            <label for="layer3-check">华东地区空域
+                <span class="layer-desc">上海、江苏、浙江、安徽、福建、江西、山东</span>
+            </label>
+        </div>
+        <div class="layer-item">
+            <input type="checkbox" id="layer5-check">
+            <label for="layer5-check">华南地区空域
+                <span class="layer-desc">广东、广西、海南</span>
+            </label>
+        </div>
+        
+        <!-- 按钮行 -->
+        <div class="button-row">
+            <button id="clear-all-layers" class="clear-btn">清除所有空域</button>
+            <button id="load-all-layers" class="load-all-btn">加载所有空域</button>
+        </div>
+        <button id="auto-load-layer" class="auto-load-btn">自动加载当前空域</button>
+        
+        <!-- Token输入区域 -->
+        <div class="token-input">
+            <label for="tianditu-token">天地图Token:</label>
+            <input type="text" id="tianditu-token" placeholder="请输入您的天地图Token">
+            <label for="airspace-token">空域图层Token:</label>
+            <input type="text" id="airspace-token" placeholder="请输入您的空域图层Token">
+            <button id="update-tokens">保存并更新Token</button>
+            <button id="clear-tokens" style="background-color: #6c757d;">清除Token</button>
+            
+            <div class="token-help">
+                <h4>如何获取Token？</h4>
+                <ul>
+                    <li>1. 登录uom官网，点击运行管理》空域信息查询。然后打开浏览器的开发者选项，选择网络，然后查看抓包数据。从里边查找token=和tk=关键字。</li>
+                    <li>2. 或者在电脑使用浏览器打开《uom Token获取工具》，按照操作提示进行获取</li>
+                </ul>
+                <div>Token将保存在您的浏览器中，下次访问自动加载</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="control-panel" id="control-panel">
+        <div class="panel-header" id="panel-header">
+            <div class="panel-title">地图控制</div>
+            <button class="toggle-btn" id="toggle-panel">▼</button>
+        </div>
+        <div class="panel-content">
+            <button id="goto-chengdu">回到默认位置</button>
+            <button id="get-location" class="location-btn">当前位置</button>
+            <button id="track-location" class="tracking-btn">位置追踪</button>
+            <button id="show-center">显示中心点</button>
+            <button id="toggle-layer-control">显示图层控制</button>
+            
+            <div class="coord-input">
+                <input type="text" id="coord-input" placeholder="格式: 经度,纬度 (如: 103.81,30.63)">
+                <button id="goto-coord">定位到坐标</button>
+            </div>
+            
+            <div class="coord-info">
+                <div class="coord-item">
+                    <span class="coord-label">坐标:</span> 
+                    <span class="coord-value" id="position-coords">-</span>
+                </div>
+                <div class="coord-item">
+                    <span class="coord-label">级别:</span> 
+                    <span class="coord-value" id="zoom-level">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        // Token管理类
+        class TokenManager {
+            constructor() {
+                this.storageKey = 'map_tokens';
+                this.tokens = this.loadTokens();
+            }
+
+            // 从localStorage加载token
+            loadTokens() {
+                try {
+                    const stored = localStorage.getItem(this.storageKey);
+                    return stored ? JSON.parse(stored) : {
+                        tianditu: '',
+                        airspace: ''
+                    };
+                } catch (e) {
+                    console.error('加载token失败:', e);
+                    return { tianditu: '', airspace: '' };
+                }
+            }
+
+            // 保存token到localStorage
+            saveTokens(tokens) {
+                try {
+                    this.tokens = tokens;
+                    localStorage.setItem(this.storageKey, JSON.stringify(tokens));
+                    return true;
+                } catch (e) {
+                    console.error('保存token失败:', e);
+                    return false;
+                }
+            }
+
+            // 清除所有token
+            clearTokens() {
+                try {
+                    localStorage.removeItem(this.storageKey);
+                    this.tokens = { tianditu: '', airspace: '' };
+                    return true;
+                } catch (e) {
+                    console.error('清除token失败:', e);
+                    return false;
+                }
+            }
+
+            // 获取token
+            getTokens() {
+                return this.tokens;
+            }
+
+            // 验证token格式
+            validateToken(token) {
+                return token && token.length > 10; // 简单验证
+            }
+        }
+
+        // 省份到图层映射
+        const provinceToLayerMap = {
+            // 华北地区
+            '北京市': 'layer1', '天津市': 'layer1', '河北省': 'layer1', '山西省': 'layer1', '内蒙古自治区': 'layer1',
+            // 东北地区  
+            '辽宁省': 'layer2', '吉林省': 'layer2', '黑龙江省': 'layer2',
+            // 华东地区
+            '上海市': 'layer3', '江苏省': 'layer3', '浙江省': 'layer3', '安徽省': 'layer3', '福建省': 'layer3', '江西省': 'layer3', '山东省': 'layer3',
+            // 华中地区
+            '河南省': 'layer4', '湖北省': 'layer4', '湖南省': 'layer4',
+            // 华南地区
+            '广东省': 'layer5', '广西壮族自治区': 'layer5', '海南省': 'layer5',
+            // 西南地区
+            '重庆市': 'layer6', '四川省': 'layer6', '贵州省': 'layer6', '云南省': 'layer6', '西藏自治区': 'layer6',
+            // 西北地区
+            '陕西省': 'layer7', '甘肃省': 'layer7', '青海省': 'layer7', '宁夏回族自治区': 'layer7', '新疆维吾尔自治区': 'layer7'
+        };
+
+        // 初始化地图，使用默认的EPSG:3857坐标系
+        var wenjiang_pos = [30.63, 103.81]; // 温江站 [纬度, 经度] - Leaflet内部格式
+        var chengdu_pos = [30.67, 104.07];  // 成都市 [纬度, 经度] - Leaflet内部格式
+        var dftpos = wenjiang_pos;
+        
+        var map = L.map('map').setView(dftpos, 12);
+        
+        // 位置追踪相关变量
+        var userLocationMarker = null;
+        var accuracyCircle = null;
+        var locationWatchId = null;
+        var isTracking = false;
+        var layerControlVisible = false;
+
+        // 自动加载模式状态变量
+        var autoLoadMode = false;
+
+        // 初始化Token管理器
+        const tokenManager = new TokenManager();
+
+        // 图层变量
+        var baseLayer, annotationLayer;
+        var additionalLayer1, additionalLayer2, additionalLayer3, additionalLayer4, additionalLayer5, additionalLayer6, additionalLayer7;
+
+        // 更新状态栏
+        function updateStatus(message) {
+            console.log(message);
+        }
+
+        // 更新token状态显示和输入框样式
+        function updateTokenStatus() {
+            const tokens = tokenManager.getTokens();
+            const tiandituStatus = document.getElementById('tianditu-status');
+            const annotationStatus = document.getElementById('annotation-status');
+            const tiandituInput = document.getElementById('tianditu-token');
+            const airspaceInput = document.getElementById('airspace-token');
+            
+            // 更新天地图token状态和输入框样式
+            if (tokenManager.validateToken(tokens.tianditu)) {
+                tiandituStatus.textContent = '已设置';
+                tiandituStatus.className = 'token-status status-valid';
+                tiandituInput.classList.remove('empty');
+            } else {
+                tiandituStatus.textContent = '未设置';
+                tiandituStatus.className = 'token-status status-empty';
+                tiandituInput.classList.add('empty');
+            }
+            
+            // 标注图层使用同样的token
+            if (tokenManager.validateToken(tokens.tianditu)) {
+                annotationStatus.textContent = '已设置';
+                annotationStatus.className = 'token-status status-valid';
+            } else {
+                annotationStatus.textContent = '未设置';
+                annotationStatus.className = 'token-status status-empty';
+            }
+            
+            // 更新空域token输入框样式
+            if (tokenManager.validateToken(tokens.airspace)) {
+                airspaceInput.classList.remove('empty');
+            } else {
+                airspaceInput.classList.add('empty');
+            }
+        }
+
+        // 更新坐标信息显示 - 调整为经度,纬度显示
+        function updateCoordinateInfo(coords) {
+            if (coords) {
+                // 显示为：经度, 纬度（用户习惯）
+                document.getElementById('position-coords').textContent = 
+                    coords.lng.toFixed(6) + ', ' + coords.lat.toFixed(6);
+            } else {
+                document.getElementById('position-coords').textContent = '-';
+            }
+            document.getElementById('zoom-level').textContent = map.getZoom();
+        }
+
+        // 创建图层函数
+        function createLayers() {
+            const tokens = tokenManager.getTokens();
+            
+            // 移除现有图层
+            if (baseLayer) map.removeLayer(baseLayer);
+            if (annotationLayer) map.removeLayer(annotationLayer);
+            if (additionalLayer1) map.removeLayer(additionalLayer1);
+            if (additionalLayer2) map.removeLayer(additionalLayer2);
+            if (additionalLayer3) map.removeLayer(additionalLayer3);
+            if (additionalLayer4) map.removeLayer(additionalLayer4);
+            if (additionalLayer5) map.removeLayer(additionalLayer5);
+            if (additionalLayer6) map.removeLayer(additionalLayer6);
+            if (additionalLayer7) map.removeLayer(additionalLayer7);
+
+            // 检查token是否有效
+            if (!tokenManager.validateToken(tokens.tianditu)) {
+                updateStatus('天地图Token未设置，底图无法加载');
+                return;
+            }
+
+            // 1. 底图图层 - 使用EPSG:3857坐标系
+            baseLayer = L.tileLayer('https://t7.tianditu.gov.cn/vec_w/wmts?tk=' + tokens.tianditu + '&service=wmts&request=GetTile&version=1.0.0&layer=vec&style=default&tilematrixset=w&format=tiles&tilematrix={z}&tilerow={y}&tilecol={x}', {
+                attribution: '天地图底图',
+                minZoom: 1,
+                maxZoom: 18
+            });
+
+            // 2. 标注图层 - 使用EPSG:3857坐标系
+            annotationLayer = L.tileLayer('https://t7.tianditu.gov.cn/cva_w/wmts?tk=' + tokens.tianditu + '&service=wmts&request=GetTile&version=1.0.0&layer=cva&style=default&tilematrixset=w&format=tiles&tilematrix={z}&tilerow={y}&tilecol={x}', {
+                attribution: '天地图标注',
+                minZoom: 1,
+                maxZoom: 18
+            });
+            
+            // 空域图层（只在token有效时创建）
+            if (tokenManager.validateToken(tokens.airspace)) {
+                // 华北地区
+                additionalLayer1 = L.tileLayer.wms('https://uom.caac.gov.cn/map/airspace/wms', {
+                    token: tokens.airspace,
+                    layers: 'QGSFKYFW:sf120000,QGSFKYFW:sf130000,QGSFKYFW:sf140000,QGSFKYFW:sf150000',
+                    styles: 'QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu',
+                    format: 'image/png8',
+                    transparent: true,
+                    version: '1.1.0',
+                    srs: 'EPSG:3857',
+                    attribution: '民航局空域信息-华北'
+                });
+
+                // 东北地区
+                additionalLayer2 = L.tileLayer.wms('https://uom.caac.gov.cn/map/airspace/wms', {
+                    token: tokens.airspace,
+                    layers: 'QGSFKYFW:sf210000,QGSFKYFW:sf220000,QGSFKYFW:sf230000',
+                    styles: 'QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu',
+                    format: 'image/png8',
+                    transparent: true,
+                    version: '1.1.0',
+                    attribution: '民航局空域信息-东北'
+                });
+
+                // 华东地区
+                additionalLayer3 = L.tileLayer.wms('https://uom.caac.gov.cn/map/airspace/wms', {
+                    token: tokens.airspace,
+                    layers: 'QGSFKYFW:sf310000,QGSFKYFW:sf320000,QGSFKYFW:sf330000,QGSFKYFW:sf340000,QGSFKYFW:sf350000,QGSFKYFW:sf360000,QGSFKYFW:sf370000',
+                    styles: 'QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu',
+                    format: 'image/png8',
+                    transparent: true,
+                    version: '1.1.0',
+                    attribution: '民航局空域信息-华东'
+                });
+
+                // 华中地区
+                additionalLayer4 = L.tileLayer.wms('https://uom.caac.gov.cn/map/airspace/wms', {
+                    token: tokens.airspace,
+                    layers: 'QGSFKYFW:sf410000,QGSFKYFW:sf420000,QGSFKYFW:sf430000',
+                    styles: 'QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu',
+                    format: 'image/png8',
+                    transparent: true,
+                    version: '1.1.0',
+                    attribution: '民航局空域信息-华中'
+                });
+
+                // 华南地区
+                additionalLayer5 = L.tileLayer.wms('https://uom.caac.gov.cn/map/airspace/wms', {
+                    token: tokens.airspace,
+                    layers: 'QGSFKYFW:sf440000,QGSFKYFW:sf450000,QGSFKYFW:sf460000',
+                    styles: 'QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu',
+                    format: 'image/png8',
+                    transparent: true,
+                    version: '1.1.0',
+                    attribution: '民航局空域信息-华南'
+                });
+
+                // 西南地区
+                additionalLayer6 = L.tileLayer.wms('https://uom.caac.gov.cn/map/airspace/wms', {
+                    token: tokens.airspace,
+                    layers: 'QGSFKYFW:sf500000,QGSFKYFW:sf510000,QGSFKYFW:sf520000,QGSFKYFW:sf530000,QGSFKYFW:sf540000',
+                    styles: 'QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu',
+                    format: 'image/png8',
+                    transparent: true,
+                    version: '1.1.0',
+                    attribution: '民航局空域信息-西南'
+                });
+
+                // 西北地区
+                additionalLayer7 = L.tileLayer.wms('https://uom.caac.gov.cn/map/airspace/wms', {
+                    token: tokens.airspace,
+                    layers: 'QGSFKYFW:sf610000,QGSFKYFW:sf620000,QGSFKYFW:sf630000,QGSFKYFW:sf640000,QGSFKYFW:sf650000',
+                    styles: 'QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu,QGSFKYFW:shifeikongyu',
+                    format: 'image/png8',
+                    transparent: true,
+                    version: '1.1.0',
+                    attribution: '民航局空域信息-西北'
+                });
+            }
+
+            // 添加基础图层到地图（固定显示）
+            baseLayer.addTo(map);
+            annotationLayer.addTo(map);
+
+            // 重新添加已选中的空域图层（只在token有效时）
+            if (tokenManager.validateToken(tokens.airspace)) {
+                if (document.getElementById('layer1-check').checked) {
+                    additionalLayer1.addTo(map);
+                }
+                if (document.getElementById('layer2-check').checked) {
+                    additionalLayer2.addTo(map);
+                }
+                if (document.getElementById('layer3-check').checked) {
+                    additionalLayer3.addTo(map);
+                }
+                if (document.getElementById('layer4-check').checked) {
+                    additionalLayer4.addTo(map);
+                }
+                if (document.getElementById('layer5-check').checked) {
+                    additionalLayer5.addTo(map);
+                }
+                if (document.getElementById('layer6-check').checked) {
+                    additionalLayer6.addTo(map);
+                }
+                if (document.getElementById('layer7-check').checked) {
+                    additionalLayer7.addTo(map);
+                }
+            }
+        }
+
+        // 初始化token输入框
+        function initializeTokenInputs() {
+            const tokens = tokenManager.getTokens();
+            document.getElementById('tianditu-token').value = tokens.tianditu || '';
+            document.getElementById('airspace-token').value = tokens.airspace || '';
+            updateTokenStatus();
+        }
+
+        // 根据省份获取对应的图层ID
+        function getLayerIdByProvince(province) {
+            return provinceToLayerMap[province] || null;
+        }
+
+        // 通过坐标获取省份信息 - 使用JS SDK方法
+        function getProvinceByCoordinate(lng, lat) {
+            return new Promise((resolve, reject) => {
+                // 检查天地图SDK是否加载
+                if (typeof T === 'undefined') {
+                    reject(new Error('天地图SDK未加载，请检查网络连接或Token设置'));
+                    return;
+                }
+                
+                // 使用天地图JS SDK的逆地理编码方法
+                var geocoder = new T.Geocoder();
+                var point = new T.LngLat(lng, lat);
+                
+                geocoder.getLocation(point, function(result) {
+                    if (result && result.addressComponent) {
+                        const province = result.addressComponent.province;
+                        resolve(province);
+                    } else {
+                        reject(new Error('获取省份信息失败'));
+                    }
+                });
+                
+                // 添加超时处理
+                setTimeout(() => {
+                    reject(new Error('请求超时或获取地址信息失败'));
+                }, 5000); // 5秒超时
+            });
+        }
+
+        // 自动加载当前中心点对应的空域图层
+        async function autoLoadCurrentLayer() {
+            const center = map.getCenter();
+            const lng = center.lng;
+            const lat = center.lat;
+            
+            updateStatus('正在获取当前位置的省份信息...');
+            
+            try {
+                const province = await getProvinceByCoordinate(lng, lat);
+                updateStatus(`当前位置属于: ${province}`);
+                
+                const layerId = getLayerIdByProvince(province);
+                if (layerId) {
+                    // 先清除所有空域图层
+                    map.removeLayer(additionalLayer1);
+                    map.removeLayer(additionalLayer2);
+                    map.removeLayer(additionalLayer3);
+                    map.removeLayer(additionalLayer4);
+                    map.removeLayer(additionalLayer5);
+                    map.removeLayer(additionalLayer6);
+                    map.removeLayer(additionalLayer7);
+                    
+                    // 取消所有复选框
+                    document.getElementById('layer1-check').checked = false;
+                    document.getElementById('layer2-check').checked = false;
+                    document.getElementById('layer3-check').checked = false;
+                    document.getElementById('layer4-check').checked = false;
+                    document.getElementById('layer5-check').checked = false;
+                    document.getElementById('layer6-check').checked = false;
+                    document.getElementById('layer7-check').checked = false;
+                    
+                    // 选中对应的图层
+                    document.getElementById(layerId + '-check').checked = true;
+                    
+                    // 添加对应的图层
+                    switch(layerId) {
+                        case 'layer1': additionalLayer1.addTo(map); break;
+                        case 'layer2': additionalLayer2.addTo(map); break;
+                        case 'layer3': additionalLayer3.addTo(map); break;
+                        case 'layer4': additionalLayer4.addTo(map); break;
+                        case 'layer5': additionalLayer5.addTo(map); break;
+                        case 'layer6': additionalLayer6.addTo(map); break;
+                        case 'layer7': additionalLayer7.addTo(map); break;
+                    }
+                    
+                    updateStatus(`已自动加载 ${province} 对应的空域图层`);
+                } else {
+                    updateStatus(`未找到 ${province} 对应的空域图层配置`);
+                }
+            } catch (error) {
+                updateStatus(`获取省份信息失败: ${error.message}`);
+            }
+        }
+
+        // 控制面板折叠/展开
+        document.getElementById('panel-header').addEventListener('click', function() {
+            var panel = document.getElementById('control-panel');
+            var toggleBtn = document.getElementById('toggle-panel');
+            
+            if (panel.classList.contains('collapsed')) {
+                panel.classList.remove('collapsed');
+                toggleBtn.textContent = '▼';
+            } else {
+                panel.classList.add('collapsed');
+                toggleBtn.textContent = '▲';
+            }
+        });
+
+        // 显示中心点坐标功能 - 调整为经度,纬度显示
+        document.getElementById('show-center').addEventListener('click', function() {
+            var center = map.getCenter();
+            
+            // 在地图中心显示弹窗 - 显示为经度,纬度
+            L.popup()
+                .setLatLng(center)
+                .setContent('地图中心点:<br>' + 
+                           '经度: ' + center.lng.toFixed(6) + '<br>' + 
+                           '纬度: ' + center.lat.toFixed(6))
+                .openOn(map);
+            
+            // 更新状态栏 - 显示为经度,纬度
+            updateStatus('已显示中心点坐标: ' + center.lng.toFixed(6) + ', ' + center.lat.toFixed(6));
+            
+            // 更新坐标信息显示
+            updateCoordinateInfo(center);
+        });
+
+        // 图层控制显示/隐藏
+        document.getElementById('toggle-layer-control').addEventListener('click', function() {
+            var layerControl = document.getElementById('layer-control');
+            var toggleBtn = document.getElementById('toggle-layer-control');
+            
+            if (layerControlVisible) {
+                layerControl.classList.add('hidden');
+                toggleBtn.textContent = '显示图层控制';
+                layerControlVisible = false;
+            } else {
+                layerControl.classList.remove('hidden');
+                toggleBtn.textContent = '隐藏图层控制';
+                layerControlVisible = true;
+            }
+        });
+
+        // 坐标定位功能 - 调整为经度,纬度输入
+        document.getElementById('goto-coord').addEventListener('click', function() {
+            var coordInput = document.getElementById('coord-input').value.trim();
+            if (!coordInput) {
+                alert('请输入坐标');
+                return;
+            }
+            
+            var coords = coordInput.split(',');
+            if (coords.length !== 2) {
+                alert('坐标格式错误，请使用"经度,纬度"格式');
+                return;
+            }
+            
+            var lng = parseFloat(coords[0].trim());  // 第一个是经度
+            var lat = parseFloat(coords[1].trim());  // 第二个是纬度
+            
+            if (isNaN(lat) || isNaN(lng)) {
+                alert('坐标格式错误，请输入有效的数字');
+                return;
+            }
+            
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                alert('坐标范围错误：纬度应在-90到90之间，经度应在-180到180之间');
+                return;
+            }
+            
+            // 定位到指定坐标（Leaflet内部需要[纬度, 经度]）
+            map.setView([lat, lng], 16);
+            updateCoordinateInfo({ lat: lat, lng: lng });
+            updateStatus('已定位到坐标: ' + lng.toFixed(6) + ', ' + lat.toFixed(6));
+        });
+
+        // 初始化图层
+        createLayers();
+
+        // 图层控制功能
+        function setupLayerControl() {
+            // 初始只添加西南地区图层（如果token有效）
+            const tokens = tokenManager.getTokens();
+            if (tokenManager.validateToken(tokens.airspace)) {
+                additionalLayer6.addTo(map);
+            }
+
+            // 绑定复选框事件 - 按数字顺序排列
+            document.getElementById('layer1-check').addEventListener('change', function(e) {
+                if (e.target.checked && tokenManager.validateToken(tokenManager.getTokens().airspace)) {
+                    additionalLayer1.addTo(map);
+                } else {
+                    map.removeLayer(additionalLayer1);
+                }
+            });
+
+            document.getElementById('layer2-check').addEventListener('change', function(e) {
+                if (e.target.checked && tokenManager.validateToken(tokenManager.getTokens().airspace)) {
+                    additionalLayer2.addTo(map);
+                } else {
+                    map.removeLayer(additionalLayer2);
+                }
+            });
+
+            document.getElementById('layer3-check').addEventListener('change', function(e) {
+                if (e.target.checked && tokenManager.validateToken(tokenManager.getTokens().airspace)) {
+                    additionalLayer3.addTo(map);
+                } else {
+                    map.removeLayer(additionalLayer3);
+                }
+            });
+
+            document.getElementById('layer4-check').addEventListener('change', function(e) {
+                if (e.target.checked && tokenManager.validateToken(tokenManager.getTokens().airspace)) {
+                    additionalLayer4.addTo(map);
+                } else {
+                    map.removeLayer(additionalLayer4);
+                }
+            });
+
+            document.getElementById('layer5-check').addEventListener('change', function(e) {
+                if (e.target.checked && tokenManager.validateToken(tokenManager.getTokens().airspace)) {
+                    additionalLayer5.addTo(map);
+                } else {
+                    map.removeLayer(additionalLayer5);
+                }
+            });
+
+            document.getElementById('layer6-check').addEventListener('change', function(e) {
+                if (e.target.checked && tokenManager.validateToken(tokenManager.getTokens().airspace)) {
+                    additionalLayer6.addTo(map);
+                } else {
+                    map.removeLayer(additionalLayer6);
+                }
+            });
+
+            document.getElementById('layer7-check').addEventListener('change', function(e) {
+                if (e.target.checked && tokenManager.validateToken(tokenManager.getTokens().airspace)) {
+                    additionalLayer7.addTo(map);
+                } else {
+                    map.removeLayer(additionalLayer7);
+                }
+            });
+
+            // 加载所有空域图层
+            document.getElementById('load-all-layers').addEventListener('click', function() {
+                if (!tokenManager.validateToken(tokenManager.getTokens().airspace)) {
+                    updateStatus('空域Token未设置，无法加载空域图层');
+                    return;
+                }
+                
+                // 选中所有复选框
+                document.getElementById('layer1-check').checked = true;
+                document.getElementById('layer2-check').checked = true;
+                document.getElementById('layer3-check').checked = true;
+                document.getElementById('layer4-check').checked = true;
+                document.getElementById('layer5-check').checked = true;
+                document.getElementById('layer6-check').checked = true;
+                document.getElementById('layer7-check').checked = true;
+                
+                // 添加所有图层
+                additionalLayer1.addTo(map);
+                additionalLayer2.addTo(map);
+                additionalLayer3.addTo(map);
+                additionalLayer4.addTo(map);
+                additionalLayer5.addTo(map);
+                additionalLayer6.addTo(map);
+                additionalLayer7.addTo(map);
+                
+                updateStatus('已加载所有空域图层');
+            });
+
+            // 自动加载当前空域
+            document.getElementById('auto-load-layer').addEventListener('click', function() {
+                if (autoLoadMode) {
+                    // 关闭自动加载模式
+                    autoLoadMode = false;
+                    this.textContent = '自动加载当前空域';
+                    this.classList.remove('active');
+                    updateStatus('已关闭自动加载模式');
+                } else {
+                    // 开启自动加载模式并立即执行一次
+                    autoLoadMode = true;
+                    this.textContent = '停止自动加载';
+                    this.classList.add('active');
+                    updateStatus('已开启自动加载模式');
+                    autoLoadCurrentLayer();
+                }
+            });
+
+            // 更新Token功能
+            document.getElementById('update-tokens').addEventListener('click', function() {
+                var newTiandituToken = document.getElementById('tianditu-token').value.trim();
+                var newAirspaceToken = document.getElementById('airspace-token').value.trim();
+                
+                if (!newTiandituToken) {
+                    alert('请输入天地图Token');
+                    return;
+                }
+                
+                const success = tokenManager.saveTokens({
+                    tianditu: newTiandituToken,
+                    airspace: newAirspaceToken
+                });
+                
+                if (success) {
+                    // 重新创建所有图层
+                    createLayers();
+                    updateTokenStatus();
+                    updateStatus('Token已保存并更新，图层已重新加载');
+                } else {
+                    alert('保存Token失败，请重试');
+                }
+            });
+
+            // 清除Token功能
+            document.getElementById('clear-tokens').addEventListener('click', function() {
+                if (confirm('确定要清除所有Token吗？这将导致地图无法显示。')) {
+                    tokenManager.clearTokens();
+                    initializeTokenInputs();
+                    createLayers();
+                    updateStatus('Token已清除，请重新输入Token');
+                }
+            });
+
+            // 清除所有空域图层
+            document.getElementById('clear-all-layers').addEventListener('click', function() {
+                // 移除所有空域图层
+                map.removeLayer(additionalLayer1);
+                map.removeLayer(additionalLayer2);
+                map.removeLayer(additionalLayer3);
+                map.removeLayer(additionalLayer4);
+                map.removeLayer(additionalLayer5);
+                map.removeLayer(additionalLayer6);
+                map.removeLayer(additionalLayer7);
+                
+                // 取消所有复选框的选中状态
+                document.getElementById('layer1-check').checked = false;
+                document.getElementById('layer2-check').checked = false;
+                document.getElementById('layer3-check').checked = false;
+                document.getElementById('layer4-check').checked = false;
+                document.getElementById('layer5-check').checked = false;
+                document.getElementById('layer6-check').checked = false;
+                document.getElementById('layer7-check').checked = false;
+                
+                updateStatus('已清除所有空域图层');
+            });
+        }
+
+        // 初始化图层控制
+        setupLayerControl();
+        initializeTokenInputs();
+
+        // 监听地图移动事件，实现自动加载
+        map.on('moveend', function() {
+            if (autoLoadMode) {
+                // 延迟执行，避免频繁调用
+                clearTimeout(window.autoLoadTimeout);
+                window.autoLoadTimeout = setTimeout(function() {
+                    autoLoadCurrentLayer();
+                }, 500);
+            }
+        });
+
+        // 控制按钮功能
+        document.getElementById('goto-chengdu').addEventListener('click', function() {
+            map.setView(dftpos, 12);
+            updateStatus('已定位到默认位置');
+        });
+
+        // 地图缩放时更新级别显示
+        map.on('zoomend', function() {
+            updateCoordinateInfo();
+        });
+
+        // 地图移动时更新坐标显示
+        map.on('moveend', function() {
+            var center = map.getCenter();
+            updateCoordinateInfo(center);
+        });
+
+        // 初始化显示当前级别
+        updateCoordinateInfo();
+
+        // 获取当前位置功能 - 联动开启自动加载
+        document.getElementById('get-location').addEventListener('click', function() {
+            if (!navigator.geolocation) {
+                updateStatus('您的浏览器不支持地理位置功能');
+                return;
+            }
+            
+            updateStatus('正在获取您的位置...');
+            
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    var lat = position.coords.latitude;
+                    var lng = position.coords.longitude;
+                    var accuracy = position.coords.accuracy;
+                    
+                    // 更新坐标信息显示
+                    updateCoordinateInfo({ lat: lat, lng: lng });
+                    
+                    // 清除之前的标记
+                    if (userLocationMarker) {
+                        map.removeLayer(userLocationMarker);
+                    }
+                    if (accuracyCircle) {
+                        map.removeLayer(accuracyCircle);
+                    }
+                    
+                    // 创建位置标记
+                    userLocationMarker = L.marker([lat, lng], {
+                        icon: L.divIcon({
+                            className: 'location-marker',
+                            iconSize: [18, 18]
+                        })
+                    }).addTo(map);
+                    
+                    // 创建精度圆
+                    accuracyCircle = L.circle([lat, lng], {
+                        radius: accuracy,
+                        className: 'accuracy-circle'
+                    }).addTo(map);
+                    
+                    // 定位到当前位置
+                    map.setView([lat, lng], 16);
+                    
+                    // 显示位置信息 - 调整为经度,纬度显示
+                    userLocationMarker.bindPopup(
+                        '<b>您的位置</b><br>' +
+                        '经度: ' + lng.toFixed(6) + '<br>' +
+                        '纬度: ' + lat.toFixed(6) + '<br>' +
+                        '精度: ±' + Math.round(accuracy) + '米'
+                    ).openPopup();
+                    
+                    // 联动开启自动加载模式
+                    if (!autoLoadMode) {
+                        autoLoadMode = true;
+                        document.getElementById('auto-load-layer').textContent = '停止自动加载';
+                        document.getElementById('auto-load-layer').classList.add('active');
+                        updateStatus('已定位到您的位置，并开启自动加载模式');
+                        // 立即执行一次自动加载
+                        autoLoadCurrentLayer();
+                    } else {
+                        updateStatus('已定位到您的位置');
+                    }
+                },
+                function(error) {
+                    var errorMessage;
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage = '位置请求被拒绝，请允许位置访问权限';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage = '无法获取位置信息';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage = '获取位置超时';
+                            break;
+                        default:
+                            errorMessage = '未知错误';
+                    }
+                    updateStatus('获取位置失败: ' + errorMessage);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 60000
+                }
+            );
+        });
+
+        // 位置追踪功能 - 联动开启自动加载并自动居中
+        document.getElementById('track-location').addEventListener('click', function() {
+            var trackButton = this;
+            
+            if (!navigator.geolocation) {
+                updateStatus('您的浏览器不支持地理位置功能');
+                return;
+            }
+            
+            if (isTracking) {
+                // 停止追踪（不联动关闭自动加载，保留手动停止功能）
+                navigator.geolocation.clearWatch(locationWatchId);
+                locationWatchId = null;
+                isTracking = false;
+                trackButton.textContent = '位置追踪';
+                trackButton.classList.remove('active');
+                updateStatus('已停止位置追踪');
+            } else {
+                // 开始追踪
+                updateStatus('正在开启位置追踪...');
+                
+                // 联动开启自动加载模式
+                if (!autoLoadMode) {
+                    autoLoadMode = true;
+                    document.getElementById('auto-load-layer').textContent = '停止自动加载';
+                    document.getElementById('auto-load-layer').classList.add('active');
+                    updateStatus('已开启自动加载模式');
+                }
+                
+                locationWatchId = navigator.geolocation.watchPosition(
+                    function(position) {
+                        var lat = position.coords.latitude;
+                        var lng = position.coords.longitude;
+                        var accuracy = position.coords.accuracy;
+                        
+                        // 更新坐标信息显示
+                        updateCoordinateInfo({ lat: lat, lng: lng });
+                        
+                        // 清除之前的标记
+                        if (userLocationMarker) {
+                            map.removeLayer(userLocationMarker);
+                        }
+                        if (accuracyCircle) {
+                            map.removeLayer(accuracyCircle);
+                        }
+                        
+                        // 创建位置标记
+                        userLocationMarker = L.marker([lat, lng], {
+                            icon: L.divIcon({
+                                className: 'location-marker',
+                                iconSize: [18, 18]
+                            })
+                        }).addTo(map);
+                        
+                        // 创建精度圆
+                        accuracyCircle = L.circle([lat, lng], {
+                            radius: accuracy,
+                            className: 'accuracy-circle'
+                        }).addTo(map);
+                        
+                        // 关键修复：在位置追踪时自动居中到当前位置
+                        if (isTracking) {
+                            map.setView([lat, lng], map.getZoom());
+                        }
+                        
+                        // 显示位置信息 - 调整为经度,纬度显示
+                        userLocationMarker.bindPopup(
+                            '<b>您的位置</b><br>' +
+                            '经度: ' + lng.toFixed(6) + '<br>' +
+                            '纬度: ' + lat.toFixed(6) + '<br>' +
+                            '精度: ±' + Math.round(accuracy) + '米<br>' +
+                            '<small>位置追踪已开启</small>'
+                        ).openPopup();
+                        
+                        // 如果开启了自动加载模式，则自动加载当前空域
+                        if (autoLoadMode) {
+                            autoLoadCurrentLayer();
+                        }
+                        
+                        updateStatus('位置追踪中...');
+                    },
+                    function(error) {
+                        var errorMessage;
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMessage = '位置请求被拒绝，请允许位置访问权限';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMessage = '无法获取位置信息';
+                                break;
+                            case error.TIMEOUT:
+                                errorMessage = '获取位置超时';
+                                break;
+                            default:
+                                errorMessage = '未知错误';
+                        }
+                        updateStatus('位置追踪失败: ' + errorMessage);
+                        
+                        // 停止追踪
+                        navigator.geolocation.clearWatch(locationWatchId);
+                        locationWatchId = null;
+                        isTracking = false;
+                        trackButton.textContent = '位置追踪';
+                        trackButton.classList.remove('active');
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 15000,
+                        maximumAge: 5000
+                    }
+                );
+                
+                isTracking = true;
+                trackButton.textContent = '停止追踪';
+                trackButton.classList.add('active');
+                updateStatus('位置追踪已开启');
+            }
+        });
+
+        // 初始化界面状态
+        function initializeUI() {
+            const tokens = tokenManager.getTokens();
+            
+            // 如果token为空，图层控制面板和控制面板都不收起
+            if (!tokenManager.validateToken(tokens.tianditu) || !tokenManager.validateToken(tokens.airspace)) {
+                // token为空，保持控制面板和图层控制面板都展开
+                document.getElementById('control-panel').classList.remove('collapsed');
+                document.getElementById('toggle-panel').textContent = '▼';
+                document.getElementById('layer-control').classList.remove('hidden');
+                document.getElementById('toggle-layer-control').textContent = '隐藏图层控制';
+                layerControlVisible = true;
+            } else {
+                // token已设置，默认收起控制面板和隐藏图层控制
+                document.getElementById('control-panel').classList.add('collapsed');
+                document.getElementById('toggle-panel').textContent = '▲';
+                document.getElementById('layer-control').classList.add('hidden');
+                document.getElementById('toggle-layer-control').textContent = '显示图层控制';
+                layerControlVisible = false;
+            }
+        }
+
+        // 添加调试信息
+        map.whenReady(function() {
+            updateStatus('地图准备就绪');
+            
+            // 初始化界面状态
+            initializeUI();
+            
+            // 检查token状态
+            const tokens = tokenManager.getTokens();
+            if (!tokenManager.validateToken(tokens.tianditu)) {
+                updateStatus('请先设置天地图Token以加载地图');
+            }
+        });
+    </script>
+</body>
+</html>

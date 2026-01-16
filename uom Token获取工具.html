@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Token获取工具</title>
+    <style>
+        body { font-family: 'Microsoft YaHei', sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }
+        .step { background: #f8f9fa; padding: 20px; margin: 15px 0; border-radius: 8px; border-left: 4px solid #3498db; }
+        .code { background: #2c3e50; color: #ecf0f1; padding: 20px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 14px; line-height: 1.4; white-space: pre-wrap; }
+        button { background: #3498db; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; margin: 10px 5px; }
+        button:hover { background: #2980b9; }
+        .tip { background: #fff3cd; border: 1px solid #ffeaa7; padding: 12px; border-radius: 6px; margin: 10px 0; font-size: 14px; }
+        .success { background: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔑 Token获取工具</h1>
+    
+    <div class="step">
+        <h3>📋 使用步骤：</h3>
+        <p>1. 打开 <a href="https://uom.caac.gov.cn" target="_blank">UOM空域查询页面</a> 并登录</p>
+        <p>2. 执行空域查询操作（确保有网络请求产生）</p>
+        <p>3. 按 <kbd>F12</kbd> 打开开发者工具</p>
+        <p>4. 选择 <strong>"控制台(Console)"</strong> 标签页</p>
+        <p>5. 复制下方代码粘贴到控制台，按 <kbd>Enter</kbd> 运行</p>
+    </div>
+
+    <div class="tip">
+        <strong>💡 提示：</strong> 如果第一次运行没有找到Token，请确保已执行查询操作，然后重新运行代码。
+    </div>
+
+    <div class="code" id="code">// Token提取助手 - 在UOM页面控制台运行
+(function() {
+    console.log('🔑 Token提取助手启动...');
+    
+    const tokens = {
+        tianditu: new Set(),
+        airspace: new Set()
+    };
+    
+    function extractTokensFromIframe() {
+        const iframe = document.querySelector('iframe');
+        if (!iframe) {
+            console.log('❌ 没有找到iframe，从网络请求中提取...');
+            extractFromPerformance();
+            return;
+        }
+        
+        try {
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            const images = iframeDoc.querySelectorAll('img');
+            
+            console.log(`📊 扫描 ${images.length} 个图片元素...`);
+            
+            images.forEach(img => {
+                const src = img.src;
+                if (src.includes('tianditu.gov.cn') && src.includes('tk=')) {
+                    const match = src.match(/tk=([^&]+)/);
+                    if (match) {
+                        tokens.tianditu.add(match[1]);
+                        console.log('✅ 发现天地图Token');
+                    }
+                }
+                if (src.includes('uom.caac.gov.cn/map/airspace') && src.includes('token=')) {
+                    const match = src.match(/token=([^&]+)/);
+                    if (match) {
+                        tokens.airspace.add(match[1]);
+                        console.log('✅ 发现空域Token');
+                    }
+                }
+            });
+            
+            displayResults();
+            
+        } catch(e) {
+            console.log('❌ 无法访问iframe内容，从网络请求中提取...');
+            extractFromPerformance();
+        }
+    }
+    
+    function extractFromPerformance() {
+        const resources = performance.getEntriesByType('resource');
+        console.log(`📊 扫描 ${resources.length} 个网络请求...`);
+        
+        resources.forEach(entry => {
+            const url = entry.name;
+            if (url.includes('tianditu.gov.cn') && url.includes('tk=')) {
+                const match = url.match(/tk=([^&]+)/);
+                if (match) {
+                    tokens.tianditu.add(match[1]);
+                    console.log('✅ 发现天地图Token');
+                }
+            }
+            if (url.includes('uom.caac.gov.cn/map/airspace') && url.includes('token=')) {
+                const match = url.match(/token=([^&]+)/);
+                if (match) {
+                    tokens.airspace.add(match[1]);
+                    console.log('✅ 发现空域Token');
+                }
+            }
+        });
+        displayResults();
+    }
+    
+    function displayResults() {
+        console.log('\\n🎯 === TOKEN提取结果 ===');
+        
+        if (tokens.tianditu.size > 0) {
+            console.log('🗺️ 天地图Token:');
+            tokens.tianditu.forEach(token => console.log(`   ${token}`));
+        } else {
+            console.log('❌ 未找到天地图Token');
+        }
+        
+        if (tokens.airspace.size > 0) {
+            console.log('✈️ 空域Token:');
+            tokens.airspace.forEach(token => console.log(`   ${token}`));
+        } else {
+            console.log('❌ 未找到空域Token');
+        }
+        
+        if (tokens.tianditu.size > 0 || tokens.airspace.size > 0) {
+            console.log('\\n📋 复制格式:');
+            tokens.tianditu.forEach(token => console.log(`天地图Token: ${token}`));
+            tokens.airspace.forEach(token => console.log(`空域Token: ${token}`));
+            console.log('\\n💡 提示：选中Token文本，右键复制即可');
+        } else {
+            console.log('\\n🔍 建议：请确保已执行查询操作，然后重新运行此代码');
+        }
+    }
+    
+    // 执行提取
+    extractTokensFromIframe();
+    console.log('✅ Token提取助手执行完成');
+})();</div>
+
+    <button onclick="copyCode()">📋 复制代码</button>
+    <button onclick="testCode()">🧪 测试代码语法</button>
+
+    <div id="message" class="hidden"></div>
+
+    <div class="step">
+        <h3>❓ 常见问题</h3>
+        <p><strong>Q: 运行后没有找到Token？</strong></p>
+        <p>A: 请确保已在UOM页面执行了查询操作，然后重新运行代码。</p>
+        
+        <p><strong>Q: 控制台显示错误？</strong></p>
+        <p>A: 请检查是否在正确的页面运行，并确保代码完整复制。</p>
+    </div>
+
+    <script>
+        function copyCode() {
+            const code = document.getElementById('code').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                showMessage('✅ 代码已复制到剪贴板！请到UOM页面控制台运行。');
+            }).catch(() => {
+                showMessage('❌ 复制失败，请手动选择代码复制。');
+            });
+        }
+
+        function testCode() {
+            try {
+                // 测试代码语法是否正确
+                const code = document.getElementById('code').textContent;
+                new Function(code);
+                showMessage('✅ 代码语法检查通过！');
+            } catch (e) {
+                showMessage('❌ 代码语法有误：' + e.message);
+            }
+        }
+
+        function showMessage(text) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = text;
+            messageDiv.className = text.includes('✅') ? 'success' : 'tip';
+            messageDiv.classList.remove('hidden');
+            
+            setTimeout(() => {
+                messageDiv.classList.add('hidden');
+            }, 3000);
+        }
+
+        // 页面加载时显示消息
+        window.addEventListener('load', function() {
+            showMessage('🔍 请确保在UOM页面执行查询操作后运行代码');
+        });
+    </script>
+</body>
+</html>
